@@ -1,0 +1,7 @@
+$NTERM A B C
+$TERM  "a"  "b"  "c"
+
+* правила грамматики
+$RULE  A = B | C | "a"
+$RULE  B = "b"
+$RULE  C = ("c" | {"ca"}) "cb"
