@@ -110,7 +110,7 @@ addTrans({"ln", "eof"}, "FComm", "FComm", true)
 local q0 = "q0"
 local F = {FKW = 6, FNTmh = 5, FNTm = 4, FTm = 3, FWS = 2, FComm = 1} -- priority and ids
 
-local file = io.open("input1.txt", "r")
+local file = io.open("input2.txt", "r")
 local code = file:read("a")
 -- print("PROGRAM:\n" .. code)
 
@@ -206,6 +206,7 @@ function parseGrammar()
 	return node
 end
 
+-- Declaration = AxiomDecl | NtermsDecl | TermsDecl | RuleDecl.
 function parseDeclaration()
 	local node = {name = "Declaration", children = {}}
 	if token.domain == "$AXIOM" then
@@ -394,6 +395,10 @@ tree = parseGrammar()
 print("end")
 
 local first = {}
+for _, nterm in ipairs(nterms) do
+	first[nterm] = {}
+end
+
 
 function TableConcat(t1, t2)
 	for i = 1, #t2 do
@@ -419,6 +424,51 @@ function woEps(aFirst)
 
 	return res
 end
+
+-- function Digamma(node)
+-- 	if not idx then idx = 1 end
+-- 	if #chain < idx then return {} end
+
+-- 	if #chain > idx then
+-- 		local u = {chain[idx]}
+-- 		local DigU = Digamma(u)
+-- 		if not haveEps(DigU) then
+-- 			return DigU
+-- 		else
+-- 			return TableConcat(woEps(DigU), Digamma(chain, idx + 1))
+-- 		end
+-- 	end
+
+-- 	local node = chain[idx]
+
+-- 	if node.domain == "TERM" or node.domain == "$EPS" then
+-- 		return { node }
+-- 	end
+-- 	if node.domain == "NTERM" then
+-- 		return first[x]
+-- 	end
+-- 	if node.name == "Expr" then
+-- 		local unionFirst = {}
+-- 		for u in ipairs(node.children) do
+-- 			unionFirst = TableConcat(unionFirst, Digamma)
+-- 		end
+-- 		return unionFirst
+-- 	end
+-- 	if node.name == ""
+
+
+
+
+-- 	if 
+-- 		local firstX = first[x]
+-- 		if haveEps(firstX) then
+-- 			return TableConcat(woEps(firstX), Digamma(chain, idx + 1))
+-- 		else
+-- 			return firstX
+-- 		end
+-- 	end
+-- 	error()
+-- end
 
 function getFirstExpr(exprTree)
 	local firstList = {}
@@ -461,52 +511,91 @@ function getFirstConcat(concatTree)
 		return getFirstExpr(concatTree.children[1].children[2])
 	end
 	if not concatTree.children[1].domain then return {} end
-	if concatTree.children[1].domain == "NTERM" or concatTree.children[1].domain == "TERM" then
+	if concatTree.children[1].domain == "TERM" then
 		return { concatTree.children[1] }
-	elseif concatTree.children[1].domain == "LPAREN" or concatTree.children[1].domain == "LPAREN_CURVE" then
+	elseif concatTree.children[1].domain == "NTERM" then
+		return first[concatTree.children[1].value]
+	elseif concatTree.children[1].domain == "LPAREN" or concatTree.children[1].domain == "LPAREN_CURVE" then -- no need?
 		return getFirstExpr(concatTree.children[2]) 
 	end
 end
 
-for left, right in pairs(rules) do
-	first[left] = getFirstExpr(right)
+
+local woRepT2 = {}
+local function isDiff(t1, t2)
+	if type(t1) ~= "table" then return false end
+	local valmap1 = {}
+	for _, dom in ipairs(t1) do
+		valmap1[dom.value] = true
+	end
+	local valmap2 = {}
+	woRepT2 = {}
+	for _, dom in ipairs(t2) do
+		if not valmap2[dom.value] then
+			valmap2[dom.value] = true
+			table.insert(woRepT2, dom)
+		end
+	end
+
+	local function isIncl(map1, map2)
+		for name, _ in pairs(map1) do
+			if not map2[name] then return false end
+		end
+
+		return true
+	end
+
+	return not (isIncl(valmap1, valmap2) and isIncl(valmap2, valmap1))
 end
 
-function union(set1, set2)
-	local set = {}
-	for key, value in pairs(set1) do
-		set[key] = value
-	end
-	for key, value in pairs(set2) do
-		set[key] = value
-	end
+local changed = true
+while changed do
+	changed = false
+	for left, right in pairs(rules) do
+		local firstExpr = getFirstExpr(right)
 
-	return set
-end
-
-local expandedFirst = {}
-function expandFirst(symb)
-	if expandedFirst[symb] then
-		return
-	end
-
-	expandedFirst[symb] = {}
-	local productions = first[symb]
-	for _, prod in ipairs(productions) do
-		if prod.domain == "TERM" or prod.domain == "$EPS" then
-			expandedFirst[symb][prod.value] = true
-		elseif prod.domain == "NTERM" then
-			expandFirst(prod.value)
-			expandedFirst[symb] = union(expandedFirst[symb], expandedFirst[prod.value])
+		if isDiff(first[left], firstExpr) then
+			changed = true
+			first[left] = woRepT2
 		end
 	end
 end
 
+-- function union(set1, set2)
+-- 	local set = {}
+-- 	for key, value in pairs(set1) do
+-- 		set[key] = value
+-- 	end
+-- 	for key, value in pairs(set2) do
+-- 		set[key] = value
+-- 	end
+
+-- 	return set
+-- end
+
+-- local expandedFirst = {}
+-- function expandFirst(symb)
+-- 	if expandedFirst[symb] then
+-- 		return
+-- 	end
+
+-- 	expandedFirst[symb] = {}
+-- 	local productions = first[symb]
+-- 	for _, prod in ipairs(productions) do
+-- 		if prod.domain == "TERM" or prod.domain == "$EPS" then
+-- 			expandedFirst[symb][prod.value] = true
+-- 		elseif prod.domain == "NTERM" then
+-- 			expandFirst(prod.value)
+-- 			expandedFirst[symb] = union(expandedFirst[symb], expandedFirst[prod.value])
+-- 		end
+-- 	end
+-- end
+
 for _, nterm in ipairs(nterms) do
-	expandFirst(nterm)
+	-- expandFirst(nterm)
 	local str = ""
-	for name, _ in pairs(expandedFirst[nterm]) do
-		str = str .. "\"" .. name .. "\", "
+	for _, dom in ipairs(first[nterm]) do
+		str = str .. "\"" .. dom.value .. "\", "
 	end
 	print(string.format("FIRST(%s) = {%s}", nterm, str))
 end
